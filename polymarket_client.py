@@ -39,6 +39,18 @@ class MarketData:
             if any(kw in text for kw in settings.excluded_keywords):
                 return False
         
+        # Exclude sports patterns (Player vs Player, Team vs Team)
+        import re
+        # Pattern: "X vs Y" or "X vs. Y" or "X v Y" or "X v. Y"
+        if re.search(r'\b\w+\s+v\.?\s+\w+\b', text):
+            # But allow political "vote" which contains "v"
+            if 'vote' not in text and 'veto' not in text:
+                return False
+        
+        # Exclude "O/U" (over/under) betting patterns
+        if re.search(r'o/u\s*\d', text):
+            return False
+        
         # Include if matches global event keywords
         return any(kw in text for kw in settings.political_keywords)
 
@@ -409,10 +421,18 @@ class PolymarketClient:
                     if hasattr(trade, 'market_slug') or hasattr(trade, 'market_title'):
                         text = f"{getattr(trade, 'market_slug', '')} {getattr(trade, 'market_title', '')}".lower()
                         
-                        # Exclude sports
+                        # Exclude sports keywords
                         if hasattr(settings, 'excluded_keywords'):
                             if any(kw in text for kw in settings.excluded_keywords):
                                 continue
+                        
+                        # Exclude sports patterns (Player vs Player, O/U bets)
+                        import re
+                        if re.search(r'\b\w+\s+v\.?\s+\w+\b', text):
+                            if 'vote' not in text and 'veto' not in text:
+                                continue
+                        if re.search(r'o/u\s*\d', text):
+                            continue
                         
                         # Must match at least one global event keyword
                         is_global_event = any(kw in text for kw in settings.political_keywords)

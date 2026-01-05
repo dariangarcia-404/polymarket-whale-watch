@@ -64,12 +64,33 @@ class Settings(BaseSettings):
     # Sports keywords to EXCLUDE
     excluded_keywords: list[str] = Field(
         default=[
+            # Leagues
             "nba", "nfl", "mlb", "nhl", "mls", "fifa", "uefa", "premier league",
-            "super bowl", "world series", "playoffs", "touchdown", "goal",
+            "la liga", "serie a", "bundesliga", "ligue 1", "atp", "wta", "pga",
+            "ncaa", "college football", "college basketball",
+            # Events
+            "super bowl", "world series", "playoffs", "championship", "tournament",
+            "grand slam", "wimbledon", "us open", "french open", "australian open",
+            "masters", "march madness", "olympics", "world cup",
+            # Sports terms
+            "touchdown", "goal", "slam dunk", "three-pointer", "home run",
+            "vs.", "v.", "match", "game", "o/u", "over/under", "spread",
+            "moneyline", "point spread", "halftime", "quarter", "inning",
+            # Sports
+            "tennis", "golf", "boxing", "ufc", "mma", "f1", "formula 1",
+            "nascar", "cricket", "rugby", "hockey", "basketball", "football",
+            "baseball", "soccer", "wrestling", "esports",
+            # Teams (sample)
             "lakers", "celtics", "warriors", "cowboys", "patriots", "chiefs",
-            "manchester", "liverpool", "chelsea", "arsenal", "barcelona", "madrid",
-            "tennis", "golf", "boxing", "ufc", "mma", "f1", "formula",
-            "olympics", "ncaa", "march madness", "slam dunk", "three-pointer"
+            "yankees", "dodgers", "red sox", "manchester", "liverpool", "chelsea",
+            "arsenal", "barcelona", "real madrid", "bayern", "juventus",
+            "bulls", "heat", "nets", "knicks", "clippers", "suns", "bucks",
+            "eagles", "49ers", "ravens", "bills", "bengals", "dolphins",
+            # Common sports bet patterns
+            "fc", "fc ", " fc", "united", "city", "athletic",
+            # This catches "Player vs Player" patterns
+            "giron", "djokovic", "nadal", "federer", "serena", "alcaraz",
+            "mahomes", "brady", "lebron", "curry", "durant", "giannis"
         ]
     )
     
