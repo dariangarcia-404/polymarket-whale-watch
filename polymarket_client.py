@@ -458,9 +458,12 @@ class PolymarketClient:
                         status="MATCHED",
                         transaction_hash=t.get("transactionHash"),
                     )
-                    # Store extra fields for filtering
+                    # Store extra fields for notifications
                     trade.market_slug = t.get("slug", "")
                     trade.market_title = t.get("title", "")
+                    trade.event_slug = t.get("eventSlug", "")
+                    trade.trader_name = t.get("pseudonym", "") or t.get("name", "")
+                    trade.icon = t.get("icon", "")
                     
                     if trade.maker_address and size > 0:
                         trades.append(trade)

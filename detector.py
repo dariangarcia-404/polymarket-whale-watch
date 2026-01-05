@@ -200,7 +200,14 @@ class WhaleDetector:
         if trade.value_usd > settings.whale_trade_threshold_usd * 20:
             severity = Severity.CRITICAL
         
-        market_name = market.question[:50] if market else trade.market_id[:20]
+        market_title = getattr(trade, 'market_title', '') or (market.question if market else trade.market_id[:20])
+        market_slug = getattr(trade, 'market_slug', '') or (market.slug if market else '')
+        trader_name = getattr(trade, 'trader_name', '') or 'Unknown'
+        
+        # Build useful links
+        market_url = f"https://polymarket.com/event/{market_slug}" if market_slug else ""
+        wallet_url = f"https://polygonscan.com/address/{wallet.address}"
+        tx_url = f"https://polygonscan.com/tx/{trade.transaction_hash}" if trade.transaction_hash else ""
         
         return DetectionResult(
             is_suspicious=True,
@@ -208,16 +215,23 @@ class WhaleDetector:
             severity=severity,
             title=f"🐋 Whale Trade: ${trade.value_usd:,.0f}",
             description=(
-                f"Large {trade.side} order detected:\n"
-                f"• Market: {market_name}...\n"
-                f"• Position: {trade.outcome} @ {trade.price:.2%}\n"
-                f"• Size: ${trade.value_usd:,.2f}\n"
-                f"• Wallet: {wallet.address[:10]}..."
+                f"Large {trade.side} order detected:\n\n"
+                f"📊 MARKET: {market_title}\n"
+                f"🔗 {market_url}\n\n"
+                f"💰 Trade: {trade.side} {trade.outcome} @ {trade.price:.1%}\n"
+                f"💵 Size: ${trade.value_usd:,.2f}\n\n"
+                f"👤 Trader: {trader_name}\n"
+                f"🔍 Wallet: {wallet_url}\n"
+                + (f"📝 TX: {tx_url}" if tx_url else "")
             ),
             risk_score=min(50 + (trade.value_usd / settings.whale_trade_threshold_usd) * 5, 100),
             metadata={
                 "trade_value": trade.value_usd,
                 "market_id": trade.market_id,
+                "market_title": market_title,
+                "market_url": market_url,
+                "wallet_url": wallet_url,
+                "tx_url": tx_url,
                 "outcome": trade.outcome,
                 "price": trade.price,
             }
@@ -241,7 +255,14 @@ class WhaleDetector:
         if trade.value_usd > settings.whale_trade_threshold_usd * 2:
             severity = Severity.CRITICAL
         
-        market_name = market.question[:50] if market else trade.market_id[:20]
+        market_title = getattr(trade, 'market_title', '') or (market.question if market else trade.market_id[:20])
+        market_slug = getattr(trade, 'market_slug', '') or (market.slug if market else '')
+        trader_name = getattr(trade, 'trader_name', '') or 'Unknown'
+        
+        # Build useful links
+        market_url = f"https://polymarket.com/event/{market_slug}" if market_slug else ""
+        wallet_url = f"https://polygonscan.com/address/{wallet.address}"
+        tx_url = f"https://polygonscan.com/tx/{trade.transaction_hash}" if trade.transaction_hash else ""
         
         return DetectionResult(
             is_suspicious=True,
@@ -249,20 +270,26 @@ class WhaleDetector:
             severity=severity,
             title=f"⚠️ New Wallet Large Bet: ${trade.value_usd:,.0f}",
             description=(
-                f"Fresh wallet making significant bet:\n"
-                f"• Wallet Age: {wallet.wallet_age_hours:.1f} hours\n"
-                f"• Trade Count: {wallet.trade_count}\n"
-                f"• Market: {market_name}...\n"
-                f"• Bet: {trade.outcome} @ {trade.price:.2%}\n"
-                f"• Size: ${trade.value_usd:,.2f}\n"
-                f"• Wallet: {wallet.address[:10]}...\n\n"
-                f"🚨 POTENTIAL INSIDER: New wallet making high-conviction bet!"
+                f"🚨 POTENTIAL INSIDER ACTIVITY\n\n"
+                f"📊 MARKET: {market_title}\n"
+                f"🔗 {market_url}\n\n"
+                f"💰 Bet: {trade.side} {trade.outcome} @ {trade.price:.1%}\n"
+                f"💵 Size: ${trade.value_usd:,.2f}\n\n"
+                f"🆕 Wallet Age: {wallet.wallet_age_hours:.1f} hours\n"
+                f"📈 Prior Trades: {wallet.trade_count}\n\n"
+                f"👤 Trader: {trader_name}\n"
+                f"🔍 Wallet: {wallet_url}\n"
+                + (f"📝 TX: {tx_url}" if tx_url else "")
             ),
             risk_score=80 + min(20, trade.value_usd / settings.whale_trade_threshold_usd),
             metadata={
                 "wallet_age_hours": wallet.wallet_age_hours,
                 "trade_count": wallet.trade_count,
                 "trade_value": trade.value_usd,
+                "market_title": market_title,
+                "market_url": market_url,
+                "wallet_url": wallet_url,
+                "tx_url": tx_url,
             }
         )
     
@@ -291,7 +318,14 @@ class WhaleDetector:
         if not is_contrarian:
             return None
         
-        market_name = market.question[:50] if market else trade.market_id[:20]
+        market_title = getattr(trade, 'market_title', '') or (market.question if market else trade.market_id[:20])
+        market_slug = getattr(trade, 'market_slug', '') or (market.slug if market else '')
+        trader_name = getattr(trade, 'trader_name', '') or 'Unknown'
+        
+        # Build useful links
+        market_url = f"https://polymarket.com/event/{market_slug}" if market_slug else ""
+        wallet_url = f"https://polygonscan.com/address/{wallet.address}"
+        tx_url = f"https://polygonscan.com/tx/{trade.transaction_hash}" if trade.transaction_hash else ""
         
         return DetectionResult(
             is_suspicious=True,
@@ -299,19 +333,27 @@ class WhaleDetector:
             severity=Severity.CRITICAL,
             title=f"🔥 High Conviction Contrarian: ${trade.value_usd:,.0f}",
             description=(
-                f"New wallet betting AGAINST consensus:\n"
-                f"• Market: {market_name}...\n"
-                f"• Market Price: {implied_prob:.1%} probability\n"
-                f"• Their Bet: {trade.side} {trade.outcome}\n"
-                f"• Size: ${trade.value_usd:,.2f}\n"
-                f"• Wallet Age: {wallet.wallet_age_hours:.1f} hours\n\n"
-                f"🚨 HIGH ALERT: Betting against market with conviction!"
+                f"🚨🚨 EXTREME INSIDER SIGNAL 🚨🚨\n\n"
+                f"New wallet betting AGAINST market consensus!\n\n"
+                f"📊 MARKET: {market_title}\n"
+                f"🔗 {market_url}\n\n"
+                f"📈 Market Price: {implied_prob:.1%} probability\n"
+                f"🎯 Their Bet: {trade.side} {trade.outcome} (contrarian!)\n"
+                f"💵 Size: ${trade.value_usd:,.2f}\n\n"
+                f"🆕 Wallet Age: {wallet.wallet_age_hours:.1f} hours\n\n"
+                f"👤 Trader: {trader_name}\n"
+                f"🔍 Wallet: {wallet_url}\n"
+                + (f"📝 TX: {tx_url}" if tx_url else "")
             ),
             risk_score=95,
             metadata={
                 "market_probability": implied_prob,
                 "is_contrarian": True,
                 "wallet_age_hours": wallet.wallet_age_hours,
+                "market_title": market_title,
+                "market_url": market_url,
+                "wallet_url": wallet_url,
+                "tx_url": tx_url,
             }
         )
     
