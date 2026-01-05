@@ -200,30 +200,60 @@ class WhaleDetector:
         if trade.value_usd > settings.whale_trade_threshold_usd * 20:
             severity = Severity.CRITICAL
         
-        market_title = getattr(trade, 'market_title', '') or (market.question if market else trade.market_id[:20])
-        market_slug = getattr(trade, 'market_slug', '') or (market.slug if market else '')
-        trader_name = getattr(trade, 'trader_name', '') or 'Unknown'
+        # Get market info - prefer market object, then trade attributes, then fetch if needed
+        market_title = ""
+        market_slug = ""
+        event_slug = getattr(trade, 'event_slug', '')
         
-        # Build useful links
-        market_url = f"https://polymarket.com/event/{market_slug}" if market_slug else ""
+        if market:
+            market_title = market.question
+            market_slug = market.slug
+        else:
+            market_title = getattr(trade, 'market_title', '') or ''
+            market_slug = getattr(trade, 'market_slug', '') or ''
+        
+        # If we still don't have a market title, try to fetch it
+        if not market_title and trade.market_id:
+            try:
+                fetched_market = await self.client.get_market_by_id(trade.market_id)
+                if fetched_market:
+                    market_title = fetched_market.question
+                    market_slug = fetched_market.slug
+            except:
+                pass
+        
+        # Fallback: use market_id but make it clear it's an ID
+        if not market_title:
+            market_title = f"[Market ID: {trade.market_id}]"
+        
+        trader_name = getattr(trade, 'trader_name', '') or ''
+        
+        # Build useful links - prefer event_slug for polymarket URL if available
+        url_slug = event_slug or market_slug
+        market_url = f"https://polymarket.com/event/{url_slug}" if url_slug else f"https://polymarket.com/markets?q={trade.market_id[:10]}"
         wallet_url = f"https://polygonscan.com/address/{wallet.address}"
         tx_url = f"https://polygonscan.com/tx/{trade.transaction_hash}" if trade.transaction_hash else ""
+        
+        # Build description with all useful info
+        desc_parts = [
+            f"Large {trade.side} order detected:\n",
+            f"📊 MARKET: {market_title}",
+            f"🔗 {market_url}\n",
+            f"💰 Trade: {trade.outcome} @ {trade.price:.1%}",
+            f"💵 Size: ${trade.value_usd:,.2f}\n",
+            f"🔍 Wallet: {wallet_url}",
+        ]
+        if trader_name:
+            desc_parts.insert(-1, f"👤 Trader: {trader_name}")
+        if tx_url:
+            desc_parts.append(f"📝 TX: {tx_url}")
         
         return DetectionResult(
             is_suspicious=True,
             alert_type=AlertType.WHALE_TRADE,
             severity=severity,
             title=f"🐋 Whale Trade: ${trade.value_usd:,.0f}",
-            description=(
-                f"Large {trade.side} order detected:\n\n"
-                f"📊 MARKET: {market_title}\n"
-                f"🔗 {market_url}\n\n"
-                f"💰 Trade: {trade.side} {trade.outcome} @ {trade.price:.1%}\n"
-                f"💵 Size: ${trade.value_usd:,.2f}\n\n"
-                f"👤 Trader: {trader_name}\n"
-                f"🔍 Wallet: {wallet_url}\n"
-                + (f"📝 TX: {tx_url}" if tx_url else "")
-            ),
+            description="\n".join(desc_parts),
             risk_score=min(50 + (trade.value_usd / settings.whale_trade_threshold_usd) * 5, 100),
             metadata={
                 "trade_value": trade.value_usd,
@@ -255,32 +285,62 @@ class WhaleDetector:
         if trade.value_usd > settings.whale_trade_threshold_usd * 2:
             severity = Severity.CRITICAL
         
-        market_title = getattr(trade, 'market_title', '') or (market.question if market else trade.market_id[:20])
-        market_slug = getattr(trade, 'market_slug', '') or (market.slug if market else '')
-        trader_name = getattr(trade, 'trader_name', '') or 'Unknown'
+        # Get market info - prefer market object, then trade attributes, then fetch if needed
+        market_title = ""
+        market_slug = ""
+        event_slug = getattr(trade, 'event_slug', '')
         
-        # Build useful links
-        market_url = f"https://polymarket.com/event/{market_slug}" if market_slug else ""
+        if market:
+            market_title = market.question
+            market_slug = market.slug
+        else:
+            market_title = getattr(trade, 'market_title', '') or ''
+            market_slug = getattr(trade, 'market_slug', '') or ''
+        
+        # If we still don't have a market title, try to fetch it
+        if not market_title and trade.market_id:
+            try:
+                fetched_market = await self.client.get_market_by_id(trade.market_id)
+                if fetched_market:
+                    market_title = fetched_market.question
+                    market_slug = fetched_market.slug
+            except:
+                pass
+        
+        # Fallback: use market_id but make it clear it's an ID
+        if not market_title:
+            market_title = f"[Market ID: {trade.market_id}]"
+        
+        trader_name = getattr(trade, 'trader_name', '') or ''
+        
+        # Build useful links - prefer event_slug for polymarket URL if available
+        url_slug = event_slug or market_slug
+        market_url = f"https://polymarket.com/event/{url_slug}" if url_slug else f"https://polymarket.com/markets?q={trade.market_id[:10]}"
         wallet_url = f"https://polygonscan.com/address/{wallet.address}"
         tx_url = f"https://polygonscan.com/tx/{trade.transaction_hash}" if trade.transaction_hash else ""
+        
+        # Build description with all useful info
+        desc_parts = [
+            f"🚨 POTENTIAL INSIDER ACTIVITY\n",
+            f"📊 MARKET: {market_title}",
+            f"🔗 {market_url}\n",
+            f"💰 Bet: {trade.outcome} @ {trade.price:.1%}",
+            f"💵 Size: ${trade.value_usd:,.2f}\n",
+            f"🆕 Wallet Age: {wallet.wallet_age_hours:.1f} hours",
+            f"📈 Prior Trades: {wallet.trade_count}\n",
+            f"🔍 Wallet: {wallet_url}",
+        ]
+        if trader_name:
+            desc_parts.insert(-1, f"👤 Trader: {trader_name}")
+        if tx_url:
+            desc_parts.append(f"📝 TX: {tx_url}")
         
         return DetectionResult(
             is_suspicious=True,
             alert_type=AlertType.NEW_WALLET_LARGE_BET,
             severity=severity,
             title=f"⚠️ New Wallet Large Bet: ${trade.value_usd:,.0f}",
-            description=(
-                f"🚨 POTENTIAL INSIDER ACTIVITY\n\n"
-                f"📊 MARKET: {market_title}\n"
-                f"🔗 {market_url}\n\n"
-                f"💰 Bet: {trade.side} {trade.outcome} @ {trade.price:.1%}\n"
-                f"💵 Size: ${trade.value_usd:,.2f}\n\n"
-                f"🆕 Wallet Age: {wallet.wallet_age_hours:.1f} hours\n"
-                f"📈 Prior Trades: {wallet.trade_count}\n\n"
-                f"👤 Trader: {trader_name}\n"
-                f"🔍 Wallet: {wallet_url}\n"
-                + (f"📝 TX: {tx_url}" if tx_url else "")
-            ),
+            description="\n".join(desc_parts),
             risk_score=80 + min(20, trade.value_usd / settings.whale_trade_threshold_usd),
             metadata={
                 "wallet_age_hours": wallet.wallet_age_hours,
@@ -318,33 +378,63 @@ class WhaleDetector:
         if not is_contrarian:
             return None
         
-        market_title = getattr(trade, 'market_title', '') or (market.question if market else trade.market_id[:20])
-        market_slug = getattr(trade, 'market_slug', '') or (market.slug if market else '')
-        trader_name = getattr(trade, 'trader_name', '') or 'Unknown'
+        # Get market info - prefer market object, then trade attributes, then fetch if needed
+        market_title = ""
+        market_slug = ""
+        event_slug = getattr(trade, 'event_slug', '')
         
-        # Build useful links
-        market_url = f"https://polymarket.com/event/{market_slug}" if market_slug else ""
+        if market:
+            market_title = market.question
+            market_slug = market.slug
+        else:
+            market_title = getattr(trade, 'market_title', '') or ''
+            market_slug = getattr(trade, 'market_slug', '') or ''
+        
+        # If we still don't have a market title, try to fetch it
+        if not market_title and trade.market_id:
+            try:
+                fetched_market = await self.client.get_market_by_id(trade.market_id)
+                if fetched_market:
+                    market_title = fetched_market.question
+                    market_slug = fetched_market.slug
+            except:
+                pass
+        
+        # Fallback: use market_id but make it clear it's an ID
+        if not market_title:
+            market_title = f"[Market ID: {trade.market_id}]"
+        
+        trader_name = getattr(trade, 'trader_name', '') or ''
+        
+        # Build useful links - prefer event_slug for polymarket URL if available
+        url_slug = event_slug or market_slug
+        market_url = f"https://polymarket.com/event/{url_slug}" if url_slug else f"https://polymarket.com/markets?q={trade.market_id[:10]}"
         wallet_url = f"https://polygonscan.com/address/{wallet.address}"
         tx_url = f"https://polygonscan.com/tx/{trade.transaction_hash}" if trade.transaction_hash else ""
+        
+        # Build description with all useful info
+        desc_parts = [
+            f"🚨🚨 EXTREME INSIDER SIGNAL 🚨🚨\n",
+            f"New wallet betting AGAINST market consensus!\n",
+            f"📊 MARKET: {market_title}",
+            f"🔗 {market_url}\n",
+            f"📈 Market Price: {implied_prob:.1%} probability",
+            f"🎯 Their Bet: {trade.outcome} (contrarian!)",
+            f"💵 Size: ${trade.value_usd:,.2f}\n",
+            f"🆕 Wallet Age: {wallet.wallet_age_hours:.1f} hours\n",
+            f"🔍 Wallet: {wallet_url}",
+        ]
+        if trader_name:
+            desc_parts.insert(-1, f"👤 Trader: {trader_name}")
+        if tx_url:
+            desc_parts.append(f"📝 TX: {tx_url}")
         
         return DetectionResult(
             is_suspicious=True,
             alert_type=AlertType.HIGH_CONVICTION_NEW_WALLET,
             severity=Severity.CRITICAL,
             title=f"🔥 High Conviction Contrarian: ${trade.value_usd:,.0f}",
-            description=(
-                f"🚨🚨 EXTREME INSIDER SIGNAL 🚨🚨\n\n"
-                f"New wallet betting AGAINST market consensus!\n\n"
-                f"📊 MARKET: {market_title}\n"
-                f"🔗 {market_url}\n\n"
-                f"📈 Market Price: {implied_prob:.1%} probability\n"
-                f"🎯 Their Bet: {trade.side} {trade.outcome} (contrarian!)\n"
-                f"💵 Size: ${trade.value_usd:,.2f}\n\n"
-                f"🆕 Wallet Age: {wallet.wallet_age_hours:.1f} hours\n\n"
-                f"👤 Trader: {trader_name}\n"
-                f"🔍 Wallet: {wallet_url}\n"
-                + (f"📝 TX: {tx_url}" if tx_url else "")
-            ),
+            description="\n".join(desc_parts),
             risk_score=95,
             metadata={
                 "market_probability": implied_prob,
