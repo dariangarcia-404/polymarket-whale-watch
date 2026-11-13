@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "polymarket-whale-watch"
+version = "1.0.0"
+description = "Watch Polymarket for whale trades and unusual bets from fresh wallets, with alerts."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Darian Garcia" }]
+requires-python = ">=3.10"
+keywords = ["polymarket", "prediction-markets", "whale-tracking", "anomaly-detection"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Financial",
+]
+dependencies = [
+    "httpx>=0.27",
+    "pydantic-settings>=2.2",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "aiosqlite>=0.20",
+    "typer>=0.12",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+sms = ["twilio>=9.0"]
+email = ["aiosmtplib>=3.0"]
+all = ["twilio>=9.0", "aiosmtplib>=3.0"]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[project.scripts]
+whalewatch = "whalewatch.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/dariangarcia-404/polymarket-whale-watch"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/whalewatch"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

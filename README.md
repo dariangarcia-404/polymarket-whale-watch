@@ -1,174 +1,127 @@
-# 🐋 Polymarket Whale & Insider Detector
+# Polymarket Whale Watch
 
-Real-time monitoring system to detect potential insider trading activity on Polymarket political markets.
+[![tests](https://github.com/dariangarcia-404/polymarket-whale-watch/actions/workflows/tests.yml/badge.svg)](https://github.com/dariangarcia-404/polymarket-whale-watch/actions/workflows/tests.yml)
 
-## Features
+Watches Polymarket's public trade feed for the kinds of bets that tend to come before
+surprising news: large positions from wallets that didn't exist a few days ago, big bets
+on long shots, and positions built up just before a market resolves. It alerts you on
+your desktop, by SMS, email, or Pushover.
 
-- **🐋 Whale Trade Detection** - Alerts on large trades exceeding customizable thresholds
-- **🆕 New Wallet Tracking** - Flags fresh wallets making significant first-time bets
-- **🔥 High-Conviction Contrarians** - Detects new wallets betting against market consensus
-- **📈 Pre-Event Accumulation** - Spots position building before market resolution
-- **🌙 Off-Hours Trading** - Identifies large trades at unusual times
-- **🔔 Desktop Notifications** - Real-time alerts with sound for critical events
-- **📊 Risk Scoring** - Calculates risk scores (0-100) for tracked wallets
+It only reads public data. It doesn't need a Polymarket account or API key, and it never trades.
 
-## Installation
+```
+╭─ CRITICAL  New wallet backs a long shot: $12,000 ─────────────────────╮
+│ Market: Will the Fed cut interest rates in December?                  │
+│ Trade: BUY Yes at 7%, $12,000                                         │
+│ Trader: Brave-Otter (wallet age 2.0 h)                                │
+│ Market gives this outcome 7%                                          │
+│ Wallet's first Polymarket activity was 2.0 h ago                      │
+│ $12,000 is over the $5,000 threshold                                  │
+│ Risk score: 74/100                                                    │
+╰───────────────────────────────────────────────────────────────────────╯
+```
+
+## How it works
+
+Every 30 seconds it asks the Polymarket [Data API](https://docs.polymarket.com) for new
+trades above half the whale threshold. The API filters by size on the server, so
+small trades never cross the wire. For each new trade it:
+
+1. **Filters by market.** It keeps real-world event markets (politics, geopolitics,
+   central banks, companies, regulators, awards). It skips sports and short-window
+   crypto price markets, where an insider edge is unlikely and noise is high. Keywords
+   match whole words only, so "EU" doesn't match "neutral". Use `--all-markets` to turn this off.
+2. **Profiles the wallet.** It finds the wallet's *first ever* Polymarket activity, so
+   "new wallet" means new to Polymarket, not just new to this tool. Each wallet is looked
+   up once and cached in SQLite.
+3. **Runs the rules** below and computes a 0–100 risk score.
+4. **Alerts** once per trade, at the highest severity any rule assigns, and stores it.
+
+| Rule | Fires when | Severity |
+| --- | --- | --- |
+| `whale_trade` | Trade ≥ threshold ($5k default) | MEDIUM; HIGH at 5×; CRITICAL at 20× |
+| `fresh_wallet_large_bet` | Wallet < 72 h old and trade ≥ ½ threshold | MEDIUM to CRITICAL, by age and size |
+| `fresh_wallet_longshot` | Wallet < 72 h old buys an outcome priced < 10% (or sells one > 90%) with ≥ threshold | CRITICAL |
+| `pre_resolution_accumulation` | 3+ same-direction trades on one market in 24 h, totalling ≥ threshold, with < 48 h until it resolves | HIGH |
+| `quiet_hours_trade` | Trade ≥ threshold between 05:00 and 10:59 UTC from a wallet < 6 days old | LOW |
+
+The risk score adds up wallet freshness (up to 40), size (up to 25), long-shot pricing (20),
+and how active the wallet has been in the last day (up to 15).
+
+## Install
+
+Requires Python 3.10+.
 
 ```bash
-# Clone or navigate to the project
-cd polymarket-bot
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy environment config
-cp .env.example .env
+git clone https://github.com/dariangarcia-404/polymarket-whale-watch
+cd polymarket-whale-watch
+python -m venv .venv && source .venv/bin/activate
+pip install -e '.[all]'      # or just '.' if you only want desktop alerts
+cp .env.example .env         # optional; edit thresholds and alert channels
 ```
 
-## Usage
-
-### Start Monitoring
+## Use
 
 ```bash
-# Start the whale detector
-python main.py monitor
-
-# With custom threshold ($10,000 minimum)
-python main.py monitor --threshold 10000
-
-# With faster polling (15 seconds)
-python main.py monitor --interval 15
-
-# Disable desktop notifications
-python main.py monitor --no-notifications
+whalewatch monitor                     # run until Ctrl-C
+whalewatch monitor -t 10000 -i 15      # $10k threshold, poll every 15 s
+whalewatch alerts -s CRITICAL          # recent alerts from the database
+whalewatch wallets                     # highest-risk wallets seen
+whalewatch test-alert                  # check that your alert channels work
+whalewatch config                      # show settings (secrets hidden)
 ```
 
-### View Data
+On startup it only looks at the last 10 minutes of trades, so a restart doesn't flood you
+with old alerts.
+
+## Alerts
+
+Desktop notifications go out for every alert (macOS Notification Center, or `notify-send`
+on Linux). SMS, email, and Pushover go out only for the severities in `NOTIFY_SEVERITIES`
+(HIGH and CRITICAL by default). Set them up in `.env`; see [`.env.example`](.env.example).
+
+Market titles and trader names are written by other people, so the tool treats them as
+untrusted. They are passed to notification commands as arguments (never built into a
+script) and HTML-escaped in email.
+
+## Development
 
 ```bash
-# Show recent alerts
-python main.py alerts
-
-# Filter by severity
-python main.py alerts --severity CRITICAL
-
-# View tracked wallets by risk score
-python main.py wallets
-
-# Show only flagged wallets
-python main.py wallets --flagged
-
-# View tracked political markets
-python main.py markets
+pip install -e '.[dev]'
+pytest
 ```
 
-### Test & Configure
-
-```bash
-# Send a test notification
-python main.py test-notification
-
-# View current configuration
-python main.py config
-```
-
-## Detection Algorithms
-
-### 1. New Wallet Large Bet
-Triggers when:
-- Wallet age < 72 hours
-- Trade value > $2,500
-- < 3 previous trades
-
-**Severity: HIGH to CRITICAL**
-
-### 2. High-Conviction Contrarian
-Triggers when:
-- New wallet (< 72 hours)
-- Buying outcome with < 25% implied probability
-- Or selling outcome with > 75% implied probability
-
-**Severity: CRITICAL** - This is the strongest insider signal
-
-### 3. Pre-Event Accumulation
-Triggers when:
-- Market resolves within 48 hours
-- Multiple same-direction trades in 24 hours
-- Total position > whale threshold
-
-**Severity: HIGH**
-
-### 4. Whale Trade
-Triggers on any trade exceeding the configured threshold.
-
-**Severity: MEDIUM to CRITICAL** (based on size)
-
-## Configuration
-
-Edit `.env` to customize:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `WHALE_TRADE_THRESHOLD_USD` | 5000 | Minimum USD to flag as whale |
-| `NEW_WALLET_AGE_HOURS` | 72 | Hours to consider wallet "new" |
-| `SUSPICIOUS_WIN_RATE` | 0.85 | Win rate to flag as suspicious |
-| `POLL_INTERVAL_SECONDS` | 30 | API polling frequency |
-
-## Alert Severities
-
-- **LOW** 🟢 - Minor anomaly, informational
-- **MEDIUM** 🟡 - Whale activity, worth watching
-- **HIGH** 🔴 - Strong insider signal, investigate
-- **CRITICAL** ⚠️ - Very suspicious pattern, immediate attention
-
-## Architecture
+The detection rules in [`detect.py`](src/whalewatch/detect.py) are pure functions, so they
+are easy to tune and test. The test suite also runs the whole loop against a fake Polymarket
+API: fetch, filter, wallet lookup, rules, SQLite, de-duplication across restarts.
 
 ```
-polymarket-bot/
-├── main.py              # CLI interface and monitoring orchestrator
-├── polymarket_client.py # API client for Polymarket (Gamma, CLOB, Data APIs)
-├── detector.py          # Detection algorithms and risk scoring
-├── notifier.py          # Notification system (desktop, console)
-├── models.py            # Database models (SQLAlchemy)
-├── config.py            # Configuration management
-├── requirements.txt     # Python dependencies
-└── .env                 # Local configuration
-```
-
-## Example Alert
-
-```
-╭──────────────────────────────────────────────────────────────╮
-│ 🔥 High Conviction Contrarian: $7,500                        │
-├──────────────────────────────────────────────────────────────┤
-│ New wallet betting AGAINST consensus:                        │
-│ • Market: Will Biden win the 2024 election?                  │
-│ • Market Price: 15% probability                              │
-│ • Their Bet: BUY YES                                         │
-│ • Size: $7,500.00                                            │
-│ • Wallet Age: 2.3 hours                                      │
-│                                                              │
-│ 🚨 HIGH ALERT: Betting against market with conviction!       │
-╰──────────────────────────────────────────────────────────────╯
-                                                    [CRITICAL]
+src/whalewatch/
+  api.py       Polymarket Data API v2 and Gamma API client
+  classify.py  event vs. sports/crypto-price market filter
+  detect.py    detection rules and risk score
+  monitor.py   polling loop
+  store.py     SQLite storage (trades, wallets, alerts)
+  notify.py    console, desktop, SMS, email, Pushover
+  cli.py       the whalewatch command
 ```
 
 ## Limitations
 
-- Polymarket API may have rate limits
-- Detection is heuristic-based (false positives possible)
-- Cannot access private wallet information
-- Market classification uses keyword matching
+- **These are heuristics, not proof.** New wallets placing big bets is also what
+  privacy-minded traders, market makers, and people who just signed up do. Treat an
+  alert as a reason to look, never as evidence of wrongdoing, and don't accuse anyone
+  based on it.
+- The market filter is keyword-based and will occasionally get a market wrong.
+- It polls, so if more than 500 qualifying trades happen between polls, the oldest are skipped.
+- Polymarket's API is unofficial and changes. The v1 Data API was retired in 2026, and
+  this tool uses v2.
 
 ## Disclaimer
 
-This tool is for research and educational purposes only. Trading on prediction markets carries risk. Not financial advice. The detection of "insider trading" is speculative and based on behavioral patterns that may have legitimate explanations.
+For research and education. Not financial advice, and not affiliated with or endorsed by
+Polymarket. Prediction markets may be restricted where you live; follow local law.
 
 ## License
 
-MIT
-
+[MIT](LICENSE) © 2026 Darian Garcia
